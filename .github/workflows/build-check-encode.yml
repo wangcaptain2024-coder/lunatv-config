@@ -83,12 +83,12 @@ jobs:
 
           node encode.js
 
-      # 6️⃣ 运行 API 检查脚本
-      - name: Run API check
-        run: |
-          API_NAME="${{ github.event.inputs.api_name || '你好' }}"
-          echo "检查 API: $API_NAME"
-          node check_api.js "$API_NAME"
+       # 6️⃣ 检测所有源接口、搜索功能
+       - name: Run source health check
+  run: |
+    echo "🔎 开始检测所有源接口..."
+    echo "🔎 测试关键词：斗罗大陆、熊出没、庆余年"
+    node check_sources_queue_retry.js "斗罗大陆,熊出没,庆余年" 
 
       # 7️⃣ 更新 README 或报告
       - name: Update report
