@@ -1,0 +1,123 @@
+name: Build JSON Config
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "config.json"
+      - ".github/workflows/build.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate JSON
+        run: |
+          python -m json.tool config.json > /dev/null
+          echo "JSON syntax OK"
+
+      - name: Build Base58
+        run: |
+          mkdir -p dist
+
+          python <<'PY'
+          import json
+
+          ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+          def base58_encode(data: bytes):
+              n = int.from_bytes(data, "big")
+
+              result = ""
+
+              while n > 0:
+                  n, r = divmod(n, 58)
+                  result = ALPHABET[r] + result
+
+              # Preserve leading zero bytes
+              zeros = 0
+              for b in data:
+                  if b == 0:
+                      zeros += 1
+                  else:
+                      break
+
+              return "1" * zeros + (result or "")
+
+          with open("config.json", "r", encoding="utf-8") as f:
+              obj = json.load(f)
+
+          content = json.dumps(
+              obj,
+              ensure_ascii=False,
+              separators=(",", ":")
+          ).encode("utf-8")
+
+          encoded = base58_encode(content)
+
+          with open("dist/config.txt", "w", encoding="ascii") as f:
+              f.write(encoded)
+
+          print("Base58 config generated")
+          print("Size:", len(encoded))
+          PY
+
+      - name: Copy JSON
+        run: |
+          cp config.json dist/config.json
+
+      - name: Create index
+        run: |
+          cat > dist/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>LunaTV / DecoTV Config</title>
+          </head>
+          <body>
+            <h1>DecoTV Config</h1>
+            <p>Base58:</p>
+            <a href="./config.txt">config.txt</a>
+            <p>Raw JSON:</p>
+            <a href="./config.json">config.json</a>
+          </body>
+          </html>
+          EOF
+
+      - name: Deploy to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
